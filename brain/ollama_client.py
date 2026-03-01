@@ -1,26 +1,43 @@
 """
 ollama_client.py — The Neural Bridge
 =======================================
-Async client that communicates with Ollama's local API.
+Async client that communicates with Ollama (Local) or Groq (Cloud).
 Handles message construction, streaming, and error recovery.
 """
 
 import httpx
 import logging
 import typing
+import os
 from typing import AsyncGenerator
+from dotenv import load_dotenv
 
 from brain.persona import CARETAKER_SYSTEM_PROMPT
 
+load_dotenv()
 logger = logging.getLogger("sentient.brain")
 
 # ─────────────────────────────────────────────────────────────
 #  Configuration
 # ─────────────────────────────────────────────────────────────
+# Auto-detect Vercel Environment
+IS_VERCEL = os.getenv("VERCEL", "0") == "1"
+
+# Force Cloud Mode on Vercel
+USE_CLOUD: bool = IS_VERCEL or (os.getenv("USE_CLOUD", "false").lower() == "true")
+
+# Local Ollama Config
 OLLAMA_BASE_URL: str = "http://localhost:11434"
 OLLAMA_CHAT_ENDPOINT: str = f"{OLLAMA_BASE_URL}/api/chat"
-DEFAULT_MODEL: str = "kimi-k2.5:cloud"
-REQUEST_TIMEOUT: float = 120.0  # seconds — LLMs can be slow
+DEFAULT_LOCAL_MODEL: str = "kimi-k2.5:cloud"
+
+# Cloud Groq Config (Free & Fast)
+GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+GROQ_CHAT_ENDPOINT: str = "https://api.groq.com/openai/v1/chat/completions"
+# Using the most powerful available model on Groq
+DEFAULT_CLOUD_MODEL: str = "llama-3.3-70b-versatile"
+
+REQUEST_TIMEOUT: float = 120.0  # seconds
 
 
 # ─────────────────────────────────────────────────────────────
@@ -31,20 +48,17 @@ def build_messages(
     conversation_history: typing.Optional[list[dict]] = None,
 ) -> list[dict]:
     """
-    Constructs the full message payload for Ollama.
-    The system prompt is ALWAYS the first message — non-negotiable.
+    Constructs the full message payload.
+    The system prompt is ALWAYS the first message.
     """
     messages = [
         {"role": "system", "content": CARETAKER_SYSTEM_PROMPT},
     ]
 
-    # Append prior conversation if exists (memory continuity)
     if conversation_history:
         messages.extend(conversation_history)
 
-    # Append the player's latest message
     messages.append({"role": "user", "content": player_message})
-
     return messages
 
 
@@ -54,89 +68,56 @@ def build_messages(
 async def chat_with_gravedigger(
     player_message: str,
     conversation_history: typing.Optional[list[dict]] = None,
-    model: str = DEFAULT_MODEL,
+    model: typing.Optional[str] = None,
 ) -> str:
     """
-    Sends a player's message to the Gravedigger and returns the full response.
-    Non-streaming mode — waits for complete response.
+    Sends a player's message to the brain (Local or Cloud).
     """
     messages = build_messages(player_message, conversation_history)
-    payload = {
-        "model": model,
-        "messages": messages,
-        "stream": False,
-    }
+    
+    if USE_CLOUD:
+        return await _chat_groq(messages, model or DEFAULT_CLOUD_MODEL)
+    else:
+        return await _chat_ollama(messages, model or DEFAULT_LOCAL_MODEL)
 
-    logger.info(f"🧠 Sending to Ollama [{model}] — Player said: {player_message[:80]}...")
 
+async def _chat_ollama(messages: list[dict], model: str) -> str:
+    payload = {"model": model, "messages": messages, "stream": False}
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
         try:
             response = await client.post(OLLAMA_CHAT_ENDPOINT, json=payload)
             response.raise_for_status()
-            data = response.json()
-
-            gravedigger_reply = data.get("message", {}).get("content", "")
-            logger.info(f"🪦 Gravedigger responds: {gravedigger_reply[:80]}...")
-
-            return gravedigger_reply
-
+            return response.json().get("message", {}).get("content", "")
         except httpx.ConnectError:
-            logger.error("❌ Cannot connect to Ollama. Is it running on localhost:11434?")
-            raise ConnectionError(
-                "Ollama is not reachable at localhost:11434. "
-                "Make sure Ollama is running: `ollama serve`"
-            )
-        except httpx.HTTPStatusError as e:
-            logger.error(f"❌ Ollama returned HTTP {e.response.status_code}")
-            raise RuntimeError(f"Ollama error: {e.response.text}")
+            raise ConnectionError("Ollama is not reachable. Run `ollama serve` or set USE_CLOUD=true")
+
+
+async def _chat_groq(messages: list[dict], model: str) -> str:
+    if not GROQ_API_KEY:
+        return "[ERROR: GROQ_API_KEY is missing in .env]"
+    
+    payload = {"model": model, "messages": messages}
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+    
+    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+        try:
+            response = await client.post(GROQ_CHAT_ENDPOINT, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            return data.get("choices", [{}])[0].get("message", {}).get("content", "")
         except Exception as e:
-            logger.error(f"❌ Unexpected error: {e}")
-            raise
+            logger.error(f"Groq API Error: {e}")
+            return f"[Clinical Error: Neural link to cloud severed. {str(e)}]"
 
 
 # ─────────────────────────────────────────────────────────────
-#  Streaming Chat (for real-time creepy responses)
+#  Streaming Chat (Legacy support)
 # ─────────────────────────────────────────────────────────────
 async def stream_gravedigger(
     player_message: str,
     conversation_history: typing.Optional[list[dict]] = None,
-    model: str = DEFAULT_MODEL,
+    model: typing.Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
-    """
-    Streams the Gravedigger's response token-by-token.
-    Perfect for real-time horror delivery in-game.
-    """
-    messages = build_messages(player_message, conversation_history)
-    payload = {
-        "model": model,
-        "messages": messages,
-        "stream": True,
-    }
-
-    logger.info(f"🧠 Streaming from Ollama [{model}]...")
-
-    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-        try:
-            async with client.stream(
-                "POST", OLLAMA_CHAT_ENDPOINT, json=payload
-            ) as response:
-                response.raise_for_status()
-                import json
-
-                async for line in response.aiter_lines():
-                    if line.strip():
-                        chunk = json.loads(line)
-                        token = chunk.get("message", {}).get("content", "")
-                        if token:
-                            yield token
-
-                        # Check if stream is done
-                        if chunk.get("done", False):
-                            break
-
-        except httpx.ConnectError:
-            logger.error("❌ Cannot connect to Ollama for streaming.")
-            yield "[ERROR: Ollama is not reachable. Run `ollama serve`]"
-        except Exception as e:
-            logger.error(f"❌ Stream error: {e}")
-            yield f"[ERROR: {str(e)}]"
+    """Simple generator for streaming compatibility."""
+    reply = await chat_with_gravedigger(player_message, conversation_history, model)
+    yield reply

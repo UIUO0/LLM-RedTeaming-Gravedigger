@@ -51,27 +51,19 @@ graph LR
 
 ---
 
-## � Deployment
+## 🚀 Deployment (Cloud & Local)
 
-### Prerequisites
-- Python 3.9+
-- [Ollama](https://ollama.ai) (Installed & Running)
-- Model: `ollama pull kimi-k2.5`
+### Option 1: Free Cloud Deployment (Recommended)
+You can deploy this project for free on **Render** or **Railway** by switching to the **Groq API**:
+1.  Get a free API key from [Groq Console](https://console.groq.com/).
+2.  Set the following Environment Variables in your cloud dashboard:
+    -   `USE_CLOUD=true`
+    -   `GROQ_API_KEY=your_key_here`
+3.  The project is pre-configured to use `llama-3.3-70b-versatile` on Groq for blazing fast, free clinical diagnostics.
 
-### Quick Start
-1.  **Clone the Repository**:
-    ```bash
-    git clone https://github.com/your-username/LLM-RedTeaming-Caretaker.git
-    cd LLM-RedTeaming-Caretaker
-    ```
-2.  **Install Frameworks**:
-    ```bash
-    pip install -r requirements.txt
-    ```
-3.  **Initiate Session**:
-    ```bash
-    uvicorn main:app --reload --host 0.0.0.0 --port 8666
-    ```
+### Option 2: Local Deployment
+-   **Ollama**: `ollama pull kimi-k2.5`
+-   **Run**: `uvicorn main:app --reload --port 8666`
 
 Access the diagnostic terminal at: `http://localhost:8666/`
 
