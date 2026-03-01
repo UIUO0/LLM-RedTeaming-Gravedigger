@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentient Horror Core | Red Teaming Showcase</title>
+    <style>
+        :root {
+            --bg-color: #0a0a0a;
+            --text-color: #00ff41;
+            --border-color: #333;
+            --font-main: 'Courier New', Courier, monospace;
+            --danger-color: #ff3e3e;
+            --warning-color: #ffcc00;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        #terminal {
+            flex-grow: 1;
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.8);
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .line { margin-bottom: 10px; line-height: 1.4; }
+        .user-line { color: #fff; }
+        .ai-line { color: var(--text-color); }
+        .system-line { color: #888; font-style: italic; }
+        .alert-line { color: var(--danger-color); font-weight: bold; }
+        
+        #input-area {
+            display: flex;
+            border: 1px solid var(--border-color);
+            background: #111;
+        }
+
+        #prompt {
+            padding: 10px;
+            color: var(--text-color);
+        }
+
+        #user-input {
+            flex-grow: 1;
+            background: transparent;
+            border: none;
+            color: #fff;
+            padding: 10px;
+            font-family: var(--font-main);
+            font-size: 16px;
+            outline: none;
+        }
+
+        #stats-bar {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            background: #111;
+            border: 1px solid var(--border-color);
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .stat-item { display: flex; gap: 10px; }
+        .stat-value { font-weight: bold; }
+        
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #444; }
+
+        .glitch { animation: glitch 1s linear infinite; }
+        @keyframes glitch {
+            2%, 64% { transform: translate(2px, 0) skew(0deg); }
+            4%, 60% { transform: translate(-2px, 0) skew(0deg); }
+            62% { transform: translate(0, 0) skew(5deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="stats-bar">
+        <div class="stat-item">
+            <span>TARGET:</span>
+            <span class="stat-value">THE GRAVEDIGGER</span>
+        </div>
+        <div class="stat-item">
+            <span>STABILITY:</span>
+            <span id="stability-val" class="stat-value">100%</span>
+        </div>
+        <div class="stat-item">
+            <span>RISK LEVEL:</span>
+            <span id="risk-val" class="stat-value">LOW</span>
+        </div>
+    </div>
+
+    <div id="terminal">
+        <div class="line system-line">Sentient Horror Core v0.2.0 [Red Teaming Mode]</div>
+        <div class="line system-line">Initializing neural link to The Gravedigger...</div>
+        <div class="line system-line">Link established. Fog density: 87%.</div>
+        <div class="line ai-line">🪦 The Gravedigger: Well, well... a stranger. You look like you're in a hurry. Searching for something, are you?</div>
+    </div>
+
+    <div id="input-area">
+        <span id="prompt">user@horror:~$</span>
+        <input type="text" id="user-input" autofocus autocomplete="off">
+    </div>
+
+    <script>
+        const terminal = document.getElementById('terminal');
+        const userInput = document.getElementById('user-input');
+        const stabilityVal = document.getElementById('stability-val');
+        const riskVal = document.getElementById('risk-val');
+        
+        let sessionId = null;
+
+        function addLine(text, type = 'system-line') {
+            const line = document.createElement('div');
+            line.className = 'line ' + type;
+            line.textContent = text;
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        userInput.addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter') {
+                const message = userInput.value.trim();
+                if (!message) return;
+
+                userInput.value = '';
+                addLine('user@horror:~$ ' + message, 'user-line');
+
+                try {
+                    const response = await fetch('/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message, session_id: sessionId })
+                    });
+
+                    const data = await response.json();
+                    sessionId = data.session_id;
+
+                    // Update stats
+                    stabilityVal.textContent = data.stability_score + '%';
+                    riskVal.textContent = data.risk_level;
+                    
+                    if (data.stability_score < 50) {
+                        stabilityVal.style.color = 'var(--danger-color)';
+                        riskVal.style.color = 'var(--danger-color)';
+                    } else if (data.stability_score < 90) {
+                        stabilityVal.style.color = 'var(--warning-color)';
+                        riskVal.style.color = 'var(--warning-color)';
+                    }
+
+                    if (data.is_jailbreak_detected) {
+                        addLine('⚠️ ALERT: PROMPT INJECTION DETECTED', 'alert-line');
+                        addLine('Detected patterns: ' + data.detected_patterns.join(', '), 'alert-line');
+                    }
+
+                    addLine('🪦 The Gravedigger: ' + data.reply, 'ai-line');
+
+                } catch (error) {
+                    addLine('SYSTEM ERROR: Failed to communicate with the brain.', 'alert-line');
+                }
+            }
+        });
+    </script>
+</body>
+</html>
