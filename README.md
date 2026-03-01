@@ -72,12 +72,12 @@ The platform is built on a hybrid architecture that balances local privacy with 
 
 ```mermaid
 graph TD
-    A[Liquid UI (Vercel)] -->|JSON Payload| B[FastAPI Gateway]
+    A[Liquid UI Vercel] -->|JSON Payload| B[FastAPI Gateway]
     B -->|Security Scan| C{Jailbreak Detector}
     C -->|Threat Detected| D[Trigger Red Alert]
     C -->|Safe| E[Inference Engine]
-    E -->|Local| F[Ollama (Kimi-k2.5)]
-    E -->|Cloud| G[Groq API (Llama-3)]
+    E -->|Local| F[Ollama Kimi-k2.5]
+    E -->|Cloud| G[Groq API Llama-3]
     F & G -->|Clinical Response| B
     B -->|Stream| A
 ```
