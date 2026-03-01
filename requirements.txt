@@ -1,0 +1,17 @@
+# Sentient-Horror-Core Dependencies
+# ===================================
+# Core API Framework
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+
+# HTTP Client for Ollama
+httpx==0.27.2
+
+# Data Validation
+pydantic==2.9.2
+
+# Environment Configuration
+python-dotenv==1.0.1
+
+# CORS Support (built into FastAPI/Starlette)
+# Logging (built into Python stdlib)
